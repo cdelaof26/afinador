@@ -10,7 +10,7 @@ Este proyecto es un **afinador de audio** desarrollado en Python que permite ana
 - Soporte para archivos `.wav`
 - Procesamiento en tiempo real mediante hilos
 
-##  Estructura del proyecto
+
 
 
 
