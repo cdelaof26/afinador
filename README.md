@@ -2,7 +2,9 @@
 
 Este proyecto es un **afinador de audio** desarrollado en Python que permite analizar señales de sonido y detectar la frecuencia fundamental, mostrando la nota musical correspondiente mediante una interfaz gráfica.
 
-##  Características
+El afinador utiliza la Transformada Rápida de Fourier (FFT) para convertir la señal del dominio del tiempo al dominio de la frecuencia y así identificar la frecuencia dominante.
+
+## Características
 - Análisis de audio usando FFT
 - Detección de frecuencia fundamental
 - Identificación de notas musicales (escala estándar A4 = 440 Hz)
@@ -10,11 +12,7 @@ Este proyecto es un **afinador de audio** desarrollado en Python que permite ana
 - Soporte para archivos `.wav`
 - Procesamiento en tiempo real mediante hilos
 
-
-
-
-
-##  Requisitos
+## Requisitos
 
 - Python 3.8 o superior
 - Librerías:
@@ -23,31 +21,30 @@ Este proyecto es un **afinador de audio** desarrollado en Python que permite ana
   - soundfile
   - tkinter (incluido con Python)
 
-##  Instalación
+## Instalación
 
 1. Clona el repositorio:
 ```bash
 git clone https://github.com/tu-usuario/afinador-seniales.git
 cd afinador-seniales
+```
 
-Instala las dependencias:
+2. Instala las dependencias:
 
-pip install numpy sounddevice soundfile
+```bash
+pip3 install -r requirements.txt
+```
 
- Ejecución
+## Ejecución
 
 Ejecuta el programa con:
 
-python afinador.py
+```bash
+python3 afinador.py
+```
 
- Uso
+## Uso
 
-Selecciona un archivo de audio .wav
-
-El sistema analiza la señal
-
-Se muestra la frecuencia detectada y la nota musical correspondiente
-
-
-
-El afinador utiliza la Transformada Rápida de Fourier (FFT) para convertir la señal del dominio del tiempo al dominio de la frecuencia y así identificar la frecuencia dominante.
+- Selecciona un archivo de audio .wav 
+- El sistema analiza la señal 
+- Se muestra la frecuencia detectada y la nota musical correspondiente

@@ -1,0 +1,6 @@
+# Directories
+.idea
+
+# Files
+_*
+*.DS_Store
