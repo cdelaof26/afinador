@@ -10,7 +10,6 @@ SAMPLE_RATE = 44100
 A4_FREQUENCY = 440.0
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-RUNNING = False
 audio_queue = queue.Queue()
 mode: Optional[str] = None  # 'mic' o 'file'
 
@@ -31,8 +30,11 @@ def hz_to_note(frequency: float) -> tuple:
     return note_name, cents_off
 
 
-def process_chunk(chunk: Optional[list] = None) -> tuple:
+def process_chunk(chunk: Optional[np.array] = None, sr: int = SAMPLE_RATE) -> tuple:
     if chunk is None:  # Solo mic
+        if audio_queue.empty():
+            return None, None
+
         chunk = audio_queue.get()
 
     try:
@@ -44,37 +46,43 @@ def process_chunk(chunk: Optional[list] = None) -> tuple:
         fft_magnitude = np.abs(fft_result)
 
         # Limpiar ruido grave
-        fft_magnitude[:int(40 * len(chunk) / SAMPLE_RATE)] = 0
+        fft_magnitude[:int(40 * len(chunk) / sr)] = 0
 
         # Buscar pico
         peak_index = np.argmax(fft_magnitude)
-        freq_detected = peak_index * SAMPLE_RATE / len(chunk)
+        freq_detected = peak_index * sr / len(chunk)
 
         # Filtro de silencio
         volume = np.linalg.norm(chunk) / 10
 
         return volume, freq_detected
-    # except (IndexError or queue.Empty) as e:
-    except IndexError as e:
+    except (IndexError or ValueError) as e:
         print(f"Error: {e}")
 
     return None, None
 
 
-def audio_callback(indata, _, _1, _2):
-    if RUNNING:
-        audio_queue.put(indata[:, 0])
-
-
 def start_mic():
     global stream
+    if stream is not None:
+        return
+
     try:
-        stream = sd.InputStream(channels=1, samplerate=SAMPLE_RATE,
-                                blocksize=BUFFER_SIZE, callback=audio_callback)
+        stream = sd.InputStream(
+            channels=1, samplerate=SAMPLE_RATE,
+            blocksize=BUFFER_SIZE, callback=lambda indata, _, _1, _2: audio_queue.put(indata[:, 0])
+        )
         stream.start()
     except Exception as e:
         print(e)
-        # messagebox.showerror("Error", f"No se pudo abrir el micrófono: {e}")
+
+
+def stop_mic():
+    global stream
+    if stream.active:
+        stream.stop()
+        stream.close()
+        stream = None
 
 
 class AudioData:
@@ -99,6 +107,9 @@ class AudioData:
 
     @property
     def duration(self):
+        if self._total_samples is None:
+            return 0
+
         return self._total_samples / self._sample_rate
 
     def prepare(self):
@@ -129,7 +140,7 @@ class AudioData:
             chunk = np.pad(chunk, (0, BUFFER_SIZE - len(chunk)))
 
         self._cursor += BUFFER_SIZE
-        return process_chunk(chunk)
+        return process_chunk(chunk, self._sample_rate)
 
     def tell(self) -> float:
         return self._cursor / self._sample_rate

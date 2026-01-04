@@ -39,18 +39,28 @@ def create_audio_data(filename: str) -> fft.AudioData:
     return d
 
 
-def process_file_at_t(d: fft.AudioData, t: float):
-    d.seek(t)
+def update_based_on_chunk_info(volume: float, freq_detected: float, do_not_modify_state_if_invalid: bool = False):
+    if volume is None:
+        if do_not_modify_state_if_invalid:
+            return
 
-    volume, freq_detected = d.read()
+        set_state("Escuchando...", "gray")
+        return
+
     if volume == -1:
         set_state("Fin del archivo", "yellow")
         return
 
     if volume > 0.1 and freq_detected > 40:
         update_interface(freq_detected)
-    else:
+    elif not do_not_modify_state_if_invalid:
         set_state("Escuchando...", "gray")
+
+
+def process_file_at_t(d: fft.AudioData, t: float):
+    d.seek(t)
+    volume, freq_detected = d.read()
+    update_based_on_chunk_info(volume, freq_detected)
 
 
 def play_file_thread(filename: str):

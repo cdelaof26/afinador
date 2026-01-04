@@ -18,6 +18,7 @@ El afinador utiliza la Transformada Rápida de Fourier (FFT) para convertir la s
 - Librerías:
   - numpy
   - soundfile
+  - sounddevice
   - [NiceGUI](https://nicegui.io)
 
 ## Instalación
