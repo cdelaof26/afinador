@@ -1,58 +1,52 @@
 from nicegui import events, Client, ui
 from typing import Optional
-import sounddevice as sd
 from back import fft, wui
-import threading
-import sys
 
 
 _audio_player: Optional[ui.audio] = None
+d: Optional[fft.AudioData] = None
 
 
-def on_closing():
+async def update():
+    time = await ui.run_javascript(f"getHtmlElement({_audio_player.id}).currentTime")
+    wui.process_file_at_t(d, time)
+
+
+async def stalk(_):
+    # TODO: Come up with a better name...
+    fft.RUNNING = True
+
+    while fft.RUNNING:
+        await update()
+
+
+def stop():
     fft.RUNNING = False
-
-    try:
-        if fft.stream.active:
-            fft.stream.stop()
-            fft.stream.close()
-    except sd.PortAudioError:
-        pass
-
-    sys.exit()
-
-
-def select_mode():
-    mode = "file"
-
-    if mode == "mic":
-        # start_mic()
-        pass
-    elif mode == "file":
-        t = threading.Thread(target=fft.play_file_thread, args=(filename,), daemon=True)
-        t.start()
-
-    # Iniciar el ciclo de análisis FFT
-    # root.after(100, fft.process_audio_fft)
 
 
 async def handle_file_update(e: events.UploadEventArguments):
+    global d  # TODO: Eliminar variable global, para permitir concurrencia con más usuarios
+
     ui.notify(f"Subido {e.file.name}")
     _audio_player.source = e.file.name
-    # TODO: Agregar un listener a _audio_player para sincronizar el procesamiento
+
+    d = wui.create_audio_data(e.file.name)
+
     _audio_player.play()
-    threading.Thread(target=wui.process_audio_fft).start()
-    threading.Thread(target=wui.play_file_thread, args=(e.file.name,)).start()
+
+    # Comportamiento anterior
+    # threading.Thread(target=wui.play_file_thread, args=(e.file.name,)).start()
+    # _audio_player.play()
 
 
 def create_audio_manager_div():
     global _audio_player
 
     with ui.element().classes("w-1/3 p-8"):
-        c = "flex flex-col justify-between space-y-4 p-4 w-full h-full rounded-xl bg-white dark:bg-[#1E1E1E] shadow-lg"
+        c = "flex flex-col justify-between space-y-4 p-4 w-full h-full rounded-xl shadow-lg border border-gray-300"
         with ui.element().classes(c):
             with ui.element().classes("flex flex-row"):
-                ui.icon("fiber_manual_record").classes("text-6xl self-center")
+                ui.icon("fiber_manual_record").classes("text-red-400 text-6xl self-center")
                 ui.label("Grabar").classes("self-center ps-2 text-4xl font-bold")
 
             with ui.element().classes("flex flex-col justify-between h-1/2"):
@@ -67,29 +61,31 @@ def create_audio_manager_div():
                 ui.label("Cargar desde archivo...").classes("indent-4 uppercase text-base font-bold")
                 ui.upload(on_upload=handle_file_update).props("accept=.mp3,.wav").classes("w-full")
 
+    _audio_player.on("play", stalk)
+    _audio_player.on("pause", lambda _: stop())
 
-enabled = False
+
+dark_mode_enabled = False
 
 
 @ui.page("/")
 def main(client: Client):
-    c = "flex flex-row w-full h-dvh bg-[#F9F9F9] dark:bg-[#000]"
-    client.content.classes(c, remove="nicegui-content q-pa-md")
+    client.content.classes("flex flex-row w-full h-dvh", remove="nicegui-content q-pa-md")
     dark = ui.dark_mode()
-    ui.colors(primary="#1E1E1E", dark="#F9F9F9")
+    ui.colors(primary="#1E1E1E")
 
     toggle_button = None
 
     def toggle_mode():
-        global enabled
-        if enabled:
+        global dark_mode_enabled
+        if dark_mode_enabled:
             toggle_button.icon = "dark_mode"
             dark.disable()
         else:
             toggle_button.icon = "light_mode"
             dark.enable()
 
-        enabled = not enabled
+        dark_mode_enabled = not dark_mode_enabled
 
     with client.content:
         create_audio_manager_div()
@@ -104,6 +100,5 @@ def main(client: Client):
             wui.label_status = ui.label("En espera").classes("text-2xl font-bold")
 
 
-# --- EJECUCIÓN ---
 if __name__ in {"__main__", "__mp_main__"}:
     ui.run(title="Afinador")

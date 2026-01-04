@@ -33,26 +33,52 @@ def update_interface(freq: float):
         label_status.style["color"] = color
 
 
-def process_audio_fft():
+def create_audio_data(filename: str) -> fft.AudioData:
+    d = fft.AudioData(filename)
+    d.prepare()
+    return d
+
+
+def process_file_at_t(d: fft.AudioData, t: float):
+    d.seek(t)
+
+    volume, freq_detected = d.read()
+    if volume == -1:
+        set_state("Fin del archivo", "yellow")
+        return
+
+    if volume > 0.1 and freq_detected > 40:
+        update_interface(freq_detected)
+    else:
+        set_state("Escuchando...", "gray")
+
+
+def play_file_thread(filename: str):
     """
-    Procesa los datos que llegan a la cola (ya sea del mic o del archivo)
+    Crea un objeto AudioData para leer el archivo y procesarlo de inmediato,
+    simula el comportamiento original de leer, procesar y esperar
+
     Nota: Esta función debe ejecutarse en un hilo
     """
-    while fft.RUNNING:
-        volume, freq_detected = fft.process_chunk()
+    d = create_audio_data(filename)
+
+    # TODO: Use proper logging
+    print(f"{d.filename=}")
+    print(f"{d.total_samples=}")
+    print(f"{d.sample_rate=}")
+    print(f"{d.duration=}")
+
+    volume, freq_detected = d.read()
+    if volume is None:
+        return
+
+    while volume != -1:
+        time.sleep(fft.BUFFER_SIZE / d.sample_rate)
         if volume > 0.1 and freq_detected > 40:
             update_interface(freq_detected)
         else:
             set_state("Escuchando...", "gray")
 
-        time.sleep(0.05)
+        volume, freq_detected = d.read()
 
-
-# --- MANEJO DE AUDIO (ARCHIVO .WAV) ---
-def play_file_thread(filename: str):
-    """
-    Lee el archivo y lo mete en la cola poco a poco para simular tiempo real
-    Nota: Esta función debe ejecutarse en un hilo
-    """
-    fft.process_file(filename)
     set_state("Fin del archivo", "yellow")

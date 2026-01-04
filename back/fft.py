@@ -3,14 +3,14 @@ import sounddevice as sd
 import soundfile as sf
 import numpy as np
 import queue
-import time
+import math
 
 BUFFER_SIZE = 4096
 SAMPLE_RATE = 44100
 A4_FREQUENCY = 440.0
 NOTE_NAMES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B']
 
-RUNNING = True
+RUNNING = False
 audio_queue = queue.Queue()
 mode: Optional[str] = None  # 'mic' o 'file'
 
@@ -31,40 +31,36 @@ def hz_to_note(frequency: float) -> tuple:
     return note_name, cents_off
 
 
-def process_chunk() -> tuple:
+def process_chunk(chunk: Optional[list] = None) -> tuple:
+    if chunk is None:  # Solo mic
+        chunk = audio_queue.get()
+
     try:
-        # data = None
-        # Vaciamos la cola para obtener el último fragmento
-        # while not audio_queue.empty():
-        #     data = audio_queue.get_nowait()
-        data = audio_queue.get()
+        # Ventana Hanning para suavizar
+        windowed_data = chunk * np.hanning(len(chunk))
 
-        if data is not None:
-            # Ventana Hanning para suavizar
-            windowed_data = data * np.hanning(len(data))
+        # FFT
+        fft_result = np.fft.rfft(windowed_data)
+        fft_magnitude = np.abs(fft_result)
 
-            # FFT
-            fft_result = np.fft.rfft(windowed_data)
-            fft_magnitude = np.abs(fft_result)
+        # Limpiar ruido grave
+        fft_magnitude[:int(40 * len(chunk) / SAMPLE_RATE)] = 0
 
-            # Limpiar ruido grave
-            fft_magnitude[:int(40 * len(data) / SAMPLE_RATE)] = 0
+        # Buscar pico
+        peak_index = np.argmax(fft_magnitude)
+        freq_detected = peak_index * SAMPLE_RATE / len(chunk)
 
-            # Buscar pico
-            peak_index = np.argmax(fft_magnitude)
-            freq_detected = peak_index * SAMPLE_RATE / len(data)
+        # Filtro de silencio
+        volume = np.linalg.norm(chunk) / 10
 
-            # Filtro de silencio
-            volumen = np.linalg.norm(data) / 10
-
-            return volumen, freq_detected
-    except (IndexError or queue.Empty) as e:
+        return volume, freq_detected
+    # except (IndexError or queue.Empty) as e:
+    except IndexError as e:
         print(f"Error: {e}")
 
-    return 0, 0
+    return None, None
 
 
-# --- MANEJO DE AUDIO (MICRÓFONO) ---
 def audio_callback(indata, _, _1, _2):
     if RUNNING:
         audio_queue.put(indata[:, 0])
@@ -81,42 +77,71 @@ def start_mic():
         # messagebox.showerror("Error", f"No se pudo abrir el micrófono: {e}")
 
 
-def process_file(filename: str):
-    # TODO: Cambiar la lógica para que procese el archivo conforme a el chunk
-    #  que se le indique
-    global SAMPLE_RATE
+class AudioData:
+    def __init__(self, filename: str):
+        self._filename: str = filename
+        self._sample_rate: Optional[int] = None
+        self._total_samples: Optional[int] = None
+        self._data: Optional[list] = None
+        self._cursor: int = 0
 
-    try:
-        # Leer archivo
-        data, fs = sf.read(filename)
+    @property
+    def filename(self):
+        return self._filename
+
+    @property
+    def sample_rate(self):
+        return self._sample_rate
+
+    @property
+    def total_samples(self):
+        return self._total_samples
+
+    @property
+    def duration(self):
+        return self._total_samples / self._sample_rate
+
+    def prepare(self):
+        if self._data is not None:
+            raise ValueError("AudioData has already been prepared")
+
+        self._data, self._sample_rate = sf.read(self._filename)
 
         # Convertir a mono si es estéreo
-        if len(data.shape) > 1:
-            data = data.mean(axis=1)
+        if len(self._data.shape) > 1:
+            self._data = self._data.mean(axis=1)
 
-        # Asegurarnos de usar el Sample Rate correcto en la FFT
-        SAMPLE_RATE = fs
+        self._total_samples = len(self._data)
+
+    def read(self) -> tuple:
+        if self._total_samples is None:
+            raise ValueError("AudioData hasn't been prepared yet")
+
+        if self._cursor >= self._total_samples:
+            return -1, -1
+
+        # Tomar un "chunk" (fragmento) de audio
+        end = min(self._cursor + BUFFER_SIZE, self._total_samples)
+        chunk = self._data[self._cursor:end]
+
+        # Rellenar con ceros si el último pedazo es pequeño
+        if len(chunk) < BUFFER_SIZE:
+            chunk = np.pad(chunk, (0, BUFFER_SIZE - len(chunk)))
+
+        self._cursor += BUFFER_SIZE
+        return process_chunk(chunk)
+
+    def tell(self) -> float:
+        return self._cursor / self._sample_rate
+
+    def seek(self, t: float):
+        position = math.ceil(t * self._sample_rate)
+        if position >= self._total_samples:
+            self._cursor = self._total_samples
+            return
 
         cursor = 0
-        total_samples = len(data)
-
-        while RUNNING and cursor < total_samples:
-            # Tomar un "chunk" (fragmento) de audio
-            end = min(cursor + BUFFER_SIZE, total_samples)
-            chunk = data[cursor:end]
-
-            # Rellenar con ceros si el último pedazo es pequeño
-            if len(chunk) < BUFFER_SIZE:
-                chunk = np.pad(chunk, (0, BUFFER_SIZE - len(chunk)))
-
-            # Meter a la cola para análisis
-            audio_queue.put(chunk)
-
-            # Esperar el tiempo real que dura ese audio para no ir acelerado
-            duration = BUFFER_SIZE / fs
-            time.sleep(duration)
-
+        while cursor < position:
             cursor += BUFFER_SIZE
 
-    except Exception as e:
-        print(f"Error leyendo archivo: {e}")
+        self._cursor = cursor
