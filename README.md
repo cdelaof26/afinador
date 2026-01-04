@@ -8,7 +8,7 @@ El afinador utiliza la Transformada Rápida de Fourier (FFT) para convertir la s
 - Análisis de audio usando FFT
 - Detección de frecuencia fundamental
 - Identificación de notas musicales (escala estándar A4 = 440 Hz)
-- Interfaz gráfica con Tkinter
+- Interfaz gráfica con NiceGUI
 - Soporte para archivos `.wav`
 - Procesamiento en tiempo real mediante hilos
 
@@ -17,9 +17,10 @@ El afinador utiliza la Transformada Rápida de Fourier (FFT) para convertir la s
 - Python 3.8 o superior
 - Librerías:
   - numpy
-  - sounddevice
+  - ~~sounddevice~~
+    - _En proceso de migración_
   - soundfile
-  - tkinter (incluido con Python)
+  - [NiceGUI](https://nicegui.io)
 
 ## Instalación
 
@@ -40,7 +41,7 @@ pip3 install -r requirements.txt
 Ejecuta el programa con:
 
 ```bash
-python3 afinador.py
+python3 main.py
 ```
 
 ## Uso
